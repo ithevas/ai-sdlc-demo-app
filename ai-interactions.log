@@ -1,0 +1,81 @@
+[2026-11-11T08:50:12Z] [SYSTEM_HOOK: SESSION_START]
+Session initialized for AI-in-SDLC Invoice Approval Workflow.
+Repository: D:\AI in SDLC\ai-sdlc-demo-app
+Agent Roles Active: SpecArchitect, BackendDev, QATester, Reviewer
+
+--------------------------------------------------------------------------------
+[2026-11-11T08:52:00Z] [AGENT_INVOKE: SpecArchitect]
+USER PROMPT:
+"Analyze the repository structure, conventions in AGENTS.md, and the feature requirements:
+- Manager approves invoices up to 50,000.
+- Director approves invoices up to 500,000.
+- Invoices over 500,000 need two distinct approvers (second must be Director).
+- The same user may never count as both approvers.
+- Rejections must return clear error and leave invoice unchanged.
+Generate the specification files using OpenSpec and the task breakdown."
+
+AGENT RESPONSE:
+Created specs/invoice-approval-limits.spec.md and specs/tasks.md.
+Defined boundary values (50k, 500k), multi-stage approval states, distinct user constraints, and failure isolation invariants.
+Updated AGENTS.md with explicit domain rules, command references, and review expectations.
+STATUS: SUCCESS
+
+--------------------------------------------------------------------------------
+[2026-11-11T08:55:30Z] [AGENT_INVOKE: BackendDev]
+USER PROMPT:
+"Implement Step 1: Add single-approver limits by role to the invoice approval service.
+Manager may approve up to 50,000. Director may approve up to 500,000.
+Add unit tests covering boundary conditions and unauthorized attempts."
+
+AGENT RESPONSE:
+- Created ApprovalLimits.cs in InvoiceApp.Domain defining ManagerMaxAmount (50,000) and DirectorMaxAmount (500,000).
+- Extended ApprovalService.Approve to evaluate role and amount.
+- Added boundary unit tests in ApprovalServiceTests:
+  - Approve_ManagerCanApproveInvoicesUpTo50000 (100.0, 50000.0)
+  - Approve_ManagerCannotApproveInvoicesOver50000_AndInvoiceStateIsUnchanged (50000.01, 100000.0)
+  - Approve_DirectorCanApproveInvoicesUpTo500000 (50000.0, 50000.01, 500000.0)
+STATUS: SUCCESS
+
+--------------------------------------------------------------------------------
+[2026-11-11T08:58:15Z] [AGENT_INVOKE: BackendDev & QATester]
+USER PROMPT:
+"Implement Step 2: Invoices over 500,000 require two distinct approvers, second approver must be a Director.
+Enforce that the same user cannot count as both approvers, and rejected attempts preserve invoice state.
+Add unit tests specifically for the negative trap rules."
+
+AGENT RESPONSE:
+- Updated Invoice model with FirstApprover and FirstApprovedAt properties.
+- Implemented two-stage approval in ApprovalService.Approve:
+  - Stage 1: Records FirstApprover, stays PendingApproval.
+  - Stage 2: Validates approver != FirstApprover and role == Director, transitions to Approved.
+- Added negative unit tests:
+  - Approve_InvoicesOver500000_SameUserCannotBeBothApprovers_AndStateIsUnchanged
+  - Approve_InvoicesOver500000_SecondApproverMustBeDirector_ManagerIsRejected
+STATUS: SUCCESS
+
+--------------------------------------------------------------------------------
+[2026-11-11T09:01:40Z] [AGENT_INVOKE: QATester]
+USER PROMPT:
+"Add one Playwright end-to-end test that covers a rejected over-limit approval through the user interface using page objects and accessible locators."
+
+AGENT RESPONSE:
+- Created e2e/pages/LoginPage.ts and e2e/pages/ApprovalsPage.ts using getByRole and getByLabel.
+- Created e2e/tests/rejected-approval.spec.ts:
+  - Signs in as demo.manager.
+  - Attempts to approve INV-1003 ($120,000).
+  - Asserts role=alert decision-error displays 'Manager cannot approve'.
+  - Asserts invoice remains in 'Pending Approval' status on the invoices list.
+STATUS: SUCCESS
+
+--------------------------------------------------------------------------------
+[2026-11-11T09:05:00Z] [AGENT_INVOKE: Reviewer]
+USER PROMPT:
+"Run an automated code review on the git diff for the feature branch and produce categorized findings with verdicts."
+
+AGENT RESPONSE:
+Findings evaluated:
+- REV-01: Boundary check comparison operators (<= vs <) -> FIXED (Boundary tests verify exact inclusive limits).
+- REV-02: State immutability upon exception -> FIXED (Repository update only triggered after all checks succeed).
+- REV-03: Concurrency lock on in-memory double approval -> DEFERRED (Repository has per-entity lock; distributed locking out of demo scope).
+- REV-04: Allow self-approval override for Director -> DISMISSED (Violates business rule: 'The same user may never count as both approvers').
+STATUS: SUCCESS
